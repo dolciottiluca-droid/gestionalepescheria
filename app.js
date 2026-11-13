@@ -18,9 +18,11 @@ let turni = {
 };
 let giornoAttivo = 'Mer';
 
-function vai(id) {
+function vai(id, btn) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
 }
 function mostraSub(s) {
     document.getElementById('sub-forn').classList.toggle('hidden', s !== 'forn');
@@ -28,20 +30,36 @@ function mostraSub(s) {
 }
 function apriKey() {
     const k = prompt('Incolla la tua chiave gratuita Google AI Studio:', localStorage.getItem('g_key') || '');
-    if (k !== null) localStorage.setItem('g_key', k.trim());
+    if (k !== null && k.trim() !== '') {
+        localStorage.setItem('g_key', k.trim());
+        alert('✅ Chiave salvata!');
+    }
 }
 
 function render() {
-    document.getElementById('tot-home').innerText = incassi[0].euro.toFixed(2) + ' €';
-    document.getElementById('lista-home').innerHTML = incassi.map(i => `<div class="p-2 bg-slate-50 rounded-xl flex justify-between"><span>${i.data}<br><small class="text-slate-400">${i.note}</small></span><b>${i.euro.toFixed(2)} €</b></div>`).join('');
-    document.getElementById('lista-ordini').innerHTML = ordini.map(o => `<div class="p-3 bg-white rounded-xl border text-sm"><b>🐟 ${o.prod}</b><p class="text-xs text-slate-500">${o.note}</p></div>`).join('');
-    document.getElementById('lista-clienti').innerHTML = clienti.map(c => `<div class="p-3 bg-white rounded-xl border text-sm"><span class="text-xs font-bold text-orange-600">${c.nome}</span><p class="font-bold">${c.cosa}</p><p class="text-xs text-slate-500">${c.note}</p>${c.foto ? `<img src="${c.foto}" class="mt-2 max-h-32 rounded border">` : ''}</div>`).join('');
-    document.getElementById('lista-inv').innerHTML = inv.map(v => `<div class="p-3 bg-white rounded-xl border text-sm"><span class="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded font-bold">${v.tipo}</span><p class="font-bold mt-1">${v.prod}</p><p class="text-xs text-slate-500">${v.note}</p></div>`).join('');
+    const primoIncasso = incassi.at(0);
+    if (primoIncasso) {
+        document.getElementById('tot-home').innerText = Number(primoIncasso.euro).toLocaleString('it-IT', {minimumFractionDigits: 2}) + ' €';
+    }
+    document.getElementById('lista-home').innerHTML = incassi.map(i => `
+        <div class="incasso-row">
+            <div class="incasso-left">
+                <div class="incasso-data">${i.data}</div>
+                <div class="incasso-note">${i.note}</div>
+            </div>
+            <div class="incasso-right">${Number(i.euro).toLocaleString('it-IT', {minimumFractionDigits: 2})} €</div>
+        </div>
+    `).join('');
+
+    document.getElementById('lista-ordini').innerHTML = ordini.map(o => `<div class="card"><strong>🐟 ${o.prod}</strong><p style="font-size:12px;color:#64748b;margin-top:4px;">${o.note}</p></div>`).join('');
+    document.getElementById('lista-clienti').innerHTML = clienti.map(c => `<div class="card"><small style="color:#ea580c;font-weight:bold;">${c.nome}</small><p style="font-weight:bold;margin:4px 0;">${c.cosa}</p><p style="font-size:12px;color:#64748b;">${c.note}</p>${c.foto ? `<img src="${c.foto}" style="margin-top:8px;max-height:140px;border-radius:8px;">` : ''}</div>`).join('');
+    document.getElementById('lista-inv').innerHTML = inv.map(v => `<div class="card"><small style="background:#ffe4e6;color:#be123c;padding:2px 6px;border-radius:6px;font-weight:bold;">${v.tipo}</small><p style="font-weight:bold;margin-top:6px;">${v.prod}</p><p style="font-size:12px;color:#64748b;">${v.note}</p></div>`).join('');
     
     const gg = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
-    document.getElementById('giorni-bar').innerHTML = gg.map(g => `<button onclick="giornoAttivo='${g}';render()" class="py-2 rounded-lg text-xs font-bold ${g===giornoAttivo?'bg-sky-600 text-white':'bg-white'}">${g}</button>`).join('');
+    document.getElementById('giorni-bar').innerHTML = gg.map(g => `<button onclick="giornoAttivo='${g}';render()" class="day-btn ${g===giornoAttivo?'active':''}">${g}</button>`).join('');
     document.getElementById('titolo-giorno').innerText = 'Turni ' + giornoAttivo;
-    document.getElementById('lista-turni').innerHTML = (turni[giornoAttivo]||[]).map(t => `<div class="p-2.5 bg-sky-50 rounded-xl text-sm font-medium">👤 ${t}</div>`).join('');
+    const listaGiorno = turni[giornoAttivo] || [];
+    document.getElementById('lista-turni').innerHTML = listaGiorno.map(t => `<div class="turno-item">👤 ${t}</div>`).join('');
 }
 
 function salvaIncasso() {
@@ -70,41 +88,88 @@ function salvaInv() {
     render();
 }
 
-async function chiamaAI(file, promptTxt) {
-    const key = localStorage.getItem('g_key');
-    if (!key) { alert('Clicca sull\'ingranaggio in alto e inserisci la chiave Google AI!'); return null; }
-    return new Promise(res => {
-        const r = new FileReader();
-        r.onload = async e => {
-            const url = e.target.result;
-            const b64 = url.split(',')[1];
-            const resp = await fetch(`https://googleapis.com{key}`, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ contents: [{ parts: [{ text: promptTxt }, { inline_data: { mime_type: file.type || 'image/jpeg', data: b64 } }] }] })
-            });
-            const d = await resp.json();
-            const txt = d.candidates[0].content.parts[0].text.replace(/```json|```/g,'').trim();
-            res({ dati: JSON.parse(txt), foto: url });
+// Rimpicciolisce la foto per evitare blocchi di rete
+function riduciFoto(file) {
+    return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const max = 1200;
+                let w = img.width, h = img.height;
+                if (w > max || h > max) {
+                    if (w > h) { h = Math.round(h * max / w); w = max; }
+                    else { w = Math.round(w * max / h); h = max; }
+                }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
         };
-        r.readAsDataURL(file);
+        reader.readAsDataURL(file);
     });
 }
 
+async function chiamaAI(fileList, promptTxt) {
+    const file = fileList ? fileList.item(0) : null;
+    if (!file) return null;
+    const key = localStorage.getItem('g_key');
+    if (!key) { alert('⚠️ Clicca sull\'ingranaggio ⚙️ in alto a destra e inserisci prima la tua chiave Google AI Studio!'); return null; }
+    
+    document.body.style.opacity = '0.5';
+    try {
+        const url = await riduciFoto(file);
+        const b64 = url.split(',').pop();
+        const resp = await fetch(`https://googleapis.com{encodeURIComponent(key)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: promptTxt },
+                        { inline_data: { mime_type: 'image/jpeg', data: b64 } }
+                    ]
+                }]
+            })
+        });
+        const d = await resp.json();
+        document.body.style.opacity = '1';
+        if (d.error) {
+            alert('❌ Risposta Google: ' + d.error.message);
+            return null;
+        }
+        const primoCandidato = d.candidates.at(0);
+        const primaParte = primoCandidato.content.parts.at(0);
+        const txt = primaParte.text.replace(/```json|```/g,'').trim();
+        return { dati: JSON.parse(txt), foto: url };
+    } catch (err) {
+        document.body.style.opacity = '1';
+        alert('❌ Connessione bloccata: apri la pagina con Live Server (non doppio clic) e controlla internet. Dettaglio: ' + err.message);
+        return null;
+    }
+}
+
 async function fotoIncasso(ev) {
-    const r = await chiamaAI(ev.target.files[0], 'Trova data e riga 16 PESCE (Totale Vendite). Rispondi SOLO JSON: {"data":"GG/MM/AAAA","euro":1234.56,"note":"Da foto"}');
-    if (r) { incassi.unshift(r.dati); render(); alert('Incasso caricato!'); }
+    const r = await chiamaAI(ev.target.files, 'Analizza questo tabulato. Trova la data (Periodo) e la riga 16 PESCE (colonna Totale Vendite, numero con decimali, e Pezzi/Scontrini). Rispondi SOLO JSON valido: {"data":"GG/MM/AAAA","euro":1234.56,"note":"Da foto tabulato"}');
+    if (r && r.dati) { incassi.unshift(r.dati); render(); vai('p-home'); alert('🐟 Incasso caricato: ' + r.dati.euro + ' €!'); }
+    ev.target.value = '';
 }
 async function fotoOrdine(ev) {
-    const r = await chiamaAI(ev.target.files[0], 'Estrai articoli ordine. Rispondi SOLO array JSON: [{"prod":"Nome e Qta","note":"Da foto"}]');
-    if (r) { r.dati.forEach(x => ordini.unshift(x)); render(); alert('Ordine caricato!'); }
+    const r = await chiamaAI(ev.target.files, 'Estrai tutti gli articoli ordinati dalla foto. Rispondi SOLO array JSON valido: [{"prod":"Nome prodotto e quantità","note":"Fornitore o dettagli"}]');
+    if (r && Array.isArray(r.dati)) { r.dati.forEach(x => ordini.unshift(x)); render(); alert('📦 Caricati ' + r.dati.length + ' articoli!'); }
+    ev.target.value = '';
 }
 async function fotoPostit(ev) {
-    const r = await chiamaAI(ev.target.files[0], 'Trascrivi post-it cliente. Rispondi SOLO JSON: {"nome":"Cliente e giorno","cosa":"Prodotti","note":"Note"}');
-    if (r) { clienti.unshift({ ...r.dati, foto: r.foto }); render(); alert('Post-it salvato!'); }
+    const r = await chiamaAI(ev.target.files, 'Trascrivi questo post-it scritto a mano di un cliente. Rispondi SOLO JSON valido: {"nome":"Cliente e giorno ritiro","cosa":"Prodotti ordinati","note":"Note pulizia/lavorazione"}');
+    if (r && r.dati) { clienti.unshift({ ...r.dati, foto: r.foto }); render(); alert('📝 Post-it salvato e trascritto!'); }
+    ev.target.value = '';
 }
 async function fotoTurni(ev) {
-    const r = await chiamaAI(ev.target.files[0], 'Estrai turni lavorativi (ignora L, FER, MAL). Rispondi SOLO JSON: {"Lun":["Nome 06:00-12:00"],"Mar":[],"Mer":[],"Gio":[],"Ven":[],"Sab":[],"Dom":[]}');
-    if (r) { turni = r.dati; render(); alert('Turni aggiornati!'); }
+    const r = await chiamaAI(ev.target.files, 'Leggi questa tabella settimanale dei turni (anche se ruotata o B/N). Estrai per ogni giorno SOLO chi lavora (ignora L, FER, MAL). Rispondi SOLO JSON valido: {"Lun":["Cognome N. 06:00-12:00"],"Mar":[],"Mer":[],"Gio":[],"Ven":[],"Sab":[],"Dom":[]}');
+    if (r && r.dati) { turni = r.dati; render(); alert('👥 Turni della settimana aggiornati!'); }
+    ev.target.value = '';
 }
 
 render();
