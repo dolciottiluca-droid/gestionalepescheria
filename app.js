@@ -88,7 +88,6 @@ function salvaInv() {
     render();
 }
 
-// Rimpicciolisce la foto per evitare blocchi di rete
 function riduciFoto(file) {
     return new Promise(resolve => {
         const reader = new FileReader();
@@ -122,9 +121,12 @@ async function chiamaAI(fileList, promptTxt) {
     try {
         const url = await riduciFoto(file);
         const b64 = url.split(',').pop();
-        const resp = await fetch(`https://googleapis.com{encodeURIComponent(key)}`, {
+        const resp = await fetch('https://googleapis.com', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': key
+            },
             body: JSON.stringify({
                 contents: [{
                     parts: [
@@ -146,7 +148,7 @@ async function chiamaAI(fileList, promptTxt) {
         return { dati: JSON.parse(txt), foto: url };
     } catch (err) {
         document.body.style.opacity = '1';
-        alert('❌ Connessione bloccata: apri la pagina con Live Server (non doppio clic) e controlla internet. Dettaglio: ' + err.message);
+        alert('❌ Errore di rete: ' + err.message);
         return null;
     }
 }
