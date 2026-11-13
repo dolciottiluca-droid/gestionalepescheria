@@ -26,6 +26,11 @@ exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
     try {
         const { key, promptTxt, b64 } = JSON.parse(event.body);
+        const chiaveFinale = process.env.GEMINI_API_KEY || key;
+        if (!chiaveFinale) {
+            return { statusCode: 400, body: JSON.stringify({ error: { message: 'Chiave API mancante' } }) };
+        }
+
         const payload = JSON.stringify({
             contents: [{
                 parts: [
@@ -35,9 +40,9 @@ exports.handler = async function(event) {
             }]
         });
 
-        let result = await chiediAGoogle('gemini-3.8-flash-lite', key, payload);
+        let result = await chiediAGoogle('gemini-3.8-flash-lite', chiaveFinale, payload);
         if (result.includes('high demand') || result.includes('not found')) {
-            result = await chiediAGoogle('gemini-3.8-flash', key, payload);
+            result = await chiediAGoogle('gemini-3.8-flash', chiaveFinale, payload);
         }
 
         return { statusCode: 200, body: result };
