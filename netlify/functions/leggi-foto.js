@@ -1,21 +1,39 @@
+const https = require('https');
+
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
     try {
         const { key, promptTxt, b64 } = JSON.parse(event.body);
-        const resp = await fetch('https://googleapis.com' + encodeURIComponent(key), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        { text: promptTxt },
-                        { inline_data: { mime_type: 'image/jpeg', data: b64 } }
-                    ]
-                }]
-            })
+        const payload = JSON.stringify({
+            contents: [{
+                parts: [
+                    { text: promptTxt },
+                    { inline_data: { mime_type: 'image/jpeg', data: b64 } }
+                ]
+            }]
         });
-        const data = await resp.json();
-        return { statusCode: 200, body: JSON.stringify(data) };
+
+        const result = await new Promise((resolve, reject) => {
+            const req = https.request({
+                hostname: '://googleapis.com',
+                path: '/v1beta/models/gemini-2.5-flash:generateContent',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': key.trim(),
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            }, (res) => {
+                let body = '';
+                res.on('data', chunk => body += chunk);
+                res.on('end', () => resolve(body));
+            });
+            req.on('error', reject);
+            req.write(payload);
+            req.end();
+        });
+
+        return { statusCode: 200, body: result };
     } catch (err) {
         return { statusCode: 500, body: JSON.stringify({ error: { message: err.message } }) };
     }
