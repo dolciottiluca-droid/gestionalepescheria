@@ -1,169 +1,40 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pescheria Smart</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background: #e2e8f0; color: #1e293b; }
-        .app-box { max-width: 480px; margin: 0 auto; background: #f8fafc; min-height: 100vh; padding-bottom: 95px; box-shadow: 0 0 25px rgba(0,0,0,0.1); }
-        
-        /* Header */
-        .header { background: linear-gradient(135deg, #0284c7, #0369a1); color: white; padding: 22px 20px; border-radius: 0 0 24px 24px; display: flex; justify-content: space-between; align-items: center; }
-        .header small { color: #bae6fd; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
-        .header h1 { font-size: 22px; margin-top: 3px; }
-        .gear-btn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; }
+const https = require('https');
 
-        /* Pagine e Schede */
-        .page { display: none; padding: 16px; }
-        .page.active { display: block; }
-        .card { background: white; border-radius: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
-        .card-title { font-size: 13px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 12px; display: block; }
+exports.handler = async function(event) {
+    if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+    try {
+        const { key, promptTxt, b64 } = JSON.parse(event.body);
+        const payload = JSON.stringify({
+            contents: [{
+                parts: [
+                    { text: promptTxt },
+                    { inline_data: { mime_type: 'image/jpeg', data: b64 } }
+                ]
+            }]
+        });
 
-        /* Riga Incassi Affiancata */
-        .incasso-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f1f5f9; border-radius: 12px; margin-bottom: 10px; gap: 16px; }
-        .incasso-left { flex: 1; }
-        .incasso-data { font-weight: bold; font-size: 15px; color: #0f172a; }
-        .incasso-note { font-size: 12px; color: #64748b; margin-top: 3px; }
-        .incasso-right { font-size: 17px; font-weight: 800; color: #0369a1; white-space: nowrap; padding-left: 14px; border-left: 2px solid #cbd5e1; }
+        const result = await new Promise((resolve, reject) => {
+            const req = https.request({
+                hostname: '://googleapis.com',
+                path: '/v1beta/models/gemini-2.5-flash:generateContent',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': key.trim(),
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            }, (res) => {
+                let body = '';
+                res.on('data', chunk => body += chunk);
+                res.on('end', () => resolve(body));
+            });
+            req.on('error', reject);
+            req.write(payload);
+            req.end();
+        });
 
-        /* Banner Fotocamera */
-        .cam-banner { background: #0284c7; color: white; padding: 16px; border-radius: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-        .cam-banner.orange { background: #ea580c; }
-        .cam-btn { background: white; color: #0369a1; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap; }
-        .cam-banner.orange .cam-btn { color: #ea580c; }
-
-        /* Campi e Bottoni */
-        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 14px; margin-bottom: 12px; background: #f8fafc; }
-        textarea { background: #fffbeb; border-color: #fde68a; min-height: 65px; }
-        .fish-btn { width: 100%; background: linear-gradient(135deg, #f97316, #ea580c); color: white; border: none; padding: 14px; border-radius: 50px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(234,88,12,0.3); }
-        
-        /* Sotto-schede Ordini */
-        .sub-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
-        .sub-tab-btn { flex: 1; padding: 12px; border: none; border-radius: 12px; font-weight: bold; font-size: 13px; cursor: pointer; color: white; }
-
-        /* Giorni Settimana */
-        .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 16px; }
-        .day-btn { padding: 10px 0; border: 1px solid #cbd5e1; border-radius: 10px; background: white; font-weight: bold; font-size: 12px; cursor: pointer; }
-        .day-btn.active { background: #0284c7; color: white; border-color: #0284c7; }
-        .turno-item { padding: 12px; background: #e0f2fe; border-radius: 10px; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #0c4a6e; }
-
-        /* Barra Navigazione Inferiore */
-        .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: white; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-around; padding: 10px 8px; gap: 6px; z-index: 50; }
-        .nav-btn { flex: 1; background: #f1f5f9; border: none; border-radius: 12px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: bold; color: #475569; cursor: pointer; }
-        .nav-btn.active { background: #e0f2fe; color: #0284c7; }
-        .hidden { display: none !important; }
-    </style>
-</head>
-<body>
-<div class="app-box">
-
-    <header class="header">
-        <div>
-            <small>Reparto 16 • Ancona</small>
-            <h1>Banco Pescheria 🐟</h1>
-        </div>
-        <button onclick="apriKey()" class="gear-btn">⚙️</button>
-    </header>
-
-    <!-- HOME -->
-    <div id="p-home" class="page active">
-        <div class="card">
-            <span class="card-title">Ultimo Incasso (11/11/2026)</span>
-            <div style="font-size: 28px; font-weight: 900; color: #0369a1;" id="tot-home">2.572,50 €</div>
-        </div>
-        <div class="card">
-            <span class="card-title">Storico Incassi Reparto 16</span>
-            <div id="lista-home"></div>
-        </div>
-    </div>
-
-    <!-- INCASSI -->
-    <div id="p-incassi" class="page">
-        <div class="cam-banner">
-            <div><strong style="font-size:14px;">Foto Tabulato</strong><br><small>Legge riga 16 PESCE</small></div>
-            <label class="cam-btn">📷 Scatta<input type="file" accept="image/*" capture="environment" onchange="fotoIncasso(event)" class="hidden"></label>
-        </div>
-        <div class="card">
-            <span class="card-title">Inserisci a mano</span>
-            <input type="text" id="i-data" placeholder="Data (es. 12/11/2026)">
-            <input type="number" step="0.01" id="i-euro" placeholder="Incasso €">
-            <textarea id="i-note" placeholder="Note giornata..."></textarea>
-            <button onclick="salvaIncasso()" class="fish-btn">🐟 SALVA INCASSO</button>
-        </div>
-    </div>
-
-    <!-- ORDINI -->
-    <div id="p-ordini" class="page">
-        <div class="sub-tabs">
-            <button onclick="mostraSub('forn')" class="sub-tab-btn" style="background:#0284c7;">📦 Ordini Ufficio</button>
-            <button onclick="mostraSub('cli')" class="sub-tab-btn" style="background:#ea580c;">📝 Post-it Clienti</button>
-        </div>
-
-        <div id="sub-forn">
-            <div class="cam-banner">
-                <div><strong style="font-size:14px;">Foto Ordine Ufficio</strong><br><small>Carica articoli da stampa</small></div>
-                <label class="cam-btn">📷 Scatta<input type="file" accept="image/*" capture="environment" onchange="fotoOrdine(event)" class="hidden"></label>
-            </div>
-            <div class="card">
-                <input type="text" id="o-prod" placeholder="Prodotto e Quantità">
-                <textarea id="o-note" placeholder="Note ordine..."></textarea>
-                <button onclick="salvaOrdine()" class="fish-btn">🐟 AGGIUNGI ORDINE</button>
-            </div>
-            <div id="lista-ordini"></div>
-        </div>
-
-        <div id="sub-cli" class="hidden">
-            <div class="cam-banner orange">
-                <div><strong style="font-size:14px;">Foto Post-it Cliente</strong><br><small>Salva foto + trascrive</small></div>
-                <label class="cam-btn">📷 Post-it<input type="file" accept="image/*" capture="environment" onchange="fotoPostit(event)" class="hidden"></label>
-            </div>
-            <div class="card">
-                <input type="text" id="c-nome" placeholder="Cliente e Giorno/Ora Ritiro">
-                <input type="text" id="c-cosa" placeholder="Cosa ha ordinato">
-                <textarea id="c-note" placeholder="Note lavorazione..."></textarea>
-                <button onclick="salvaCliente()" class="fish-btn">🐟 SALVA CLIENTE</button>
-            </div>
-            <div id="lista-clienti"></div>
-        </div>
-    </div>
-
-    <!-- INVENTARIO -->
-    <div id="p-inv" class="page">
-        <div class="card">
-            <span class="card-title">Inventario, Scarti e Furti</span>
-            <select id="v-tipo"><option>Scarto / Calo</option><option>Furto / Ammanco</option><option>Differenza Inventariale</option></select>
-            <input type="text" id="v-prod" placeholder="Prodotto e Kg/€">
-            <textarea id="v-note" placeholder="Note dettagliate..."></textarea>
-            <button onclick="salvaInv()" class="fish-btn">🐟 SALVA MOVIMENTO</button>
-        </div>
-        <div id="lista-inv"></div>
-    </div>
-
-    <!-- ORGANICO -->
-    <div id="p-org" class="page">
-        <div class="cam-banner">
-            <div><strong style="font-size:14px;">Foto Tabella Turni B/N</strong><br><small>Compila tutta la settimana</small></div>
-            <label class="cam-btn">📷 Scatta<input type="file" accept="image/*" capture="environment" onchange="fotoTurni(event)" class="hidden"></label>
-        </div>
-        <div class="days-grid" id="giorni-bar"></div>
-        <div class="card">
-            <span class="card-title" id="titolo-giorno">Turni Mercoledì</span>
-            <div id="lista-turni"></div>
-        </div>
-    </div>
-
-    <!-- BARRA IN BASSO -->
-    <nav class="bottom-nav">
-        <button onclick="vai('p-home', this)" class="nav-btn active"><span>🏠</span><span>Home</span></button>
-        <button onclick="vai('p-incassi', this)" class="nav-btn"><span>💶</span><span>Incassi</span></button>
-        <button onclick="vai('p-ordini', this)" class="nav-btn"><span>🐟</span><span>Ordini</span></button>
-        <button onclick="vai('p-inv', this)" class="nav-btn"><span>📦</span><span>Inv.</span></button>
-        <button onclick="vai('p-org', this)" class="nav-btn"><span>👥</span><span>Turni</span></button>
-    </nav>
-
-</div>
-<script src="app.js"></script>
-</body>
-</html>
+        return { statusCode: 200, body: result };
+    } catch (err) {
+        return { statusCode: 500, body: JSON.stringify({ error: { message: err.message } }) };
+    }
+};
