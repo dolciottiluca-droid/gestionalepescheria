@@ -16,7 +16,7 @@ exports.handler = async function(event) {
         const result = await new Promise((resolve, reject) => {
             const req = https.request({
               hostname: 'generativelanguage' + '.googleapis.com',
-                path: '/v1beta/models/gemini-2.5-flash:generateContent',
+                path: '/v1beta/models/gemini-3.8-flash:generateContent',
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
