@@ -1,5 +1,27 @@
 const https = require('https');
 
+function chiediAGoogle(modello, key, payload) {
+    return new Promise((resolve, reject) => {
+        const req = https.request({
+            hostname: 'generativelanguage' + '.googleapis.com',
+            path: `/v1beta/models/${modello}:generateContent`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': key.trim(),
+                'Content-Length': Buffer.byteLength(payload)
+            }
+        }, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => resolve(body));
+        });
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+    });
+}
+
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
     try {
@@ -13,25 +35,10 @@ exports.handler = async function(event) {
             }]
         });
 
-        const result = await new Promise((resolve, reject) => {
-            const req = https.request({
-              hostname: 'generativelanguage' + '.googleapis.com',
-                path: '/v1beta/models/gemini-3.8-flash:generateContent',
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': key.trim(),
-                    'Content-Length': Buffer.byteLength(payload)
-                }
-            }, (res) => {
-                let body = '';
-                res.on('data', chunk => body += chunk);
-                res.on('end', () => resolve(body));
-            });
-            req.on('error', reject);
-            req.write(payload);
-            req.end();
-        });
+        let result = await chiediAGoogle('gemini-3.8-flash-lite', key, payload);
+        if (result.includes('high demand') || result.includes('not found')) {
+            result = await chiediAGoogle('gemini-3.8-flash', key, payload);
+        }
 
         return { statusCode: 200, body: result };
     } catch (err) {
