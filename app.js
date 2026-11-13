@@ -95,7 +95,7 @@ function riduciFoto(file) {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const max = 1200;
+                const max = 1100;
                 let w = img.width, h = img.height;
                 if (w > max || h > max) {
                     if (w > h) { h = Math.round(h * max / w); w = max; }
@@ -103,7 +103,7 @@ function riduciFoto(file) {
                 }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', 0.8));
+                resolve(canvas.toDataURL('image/jpeg', 0.75));
             };
             img.src = e.target.result;
         };
@@ -121,20 +121,10 @@ async function chiamaAI(fileList, promptTxt) {
     try {
         const url = await riduciFoto(file);
         const b64 = url.split(',').pop();
-        const resp = await fetch('https://googleapis.com', {
+        const resp = await fetch('/.netlify/functions/leggi-foto', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': key
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        { text: promptTxt },
-                        { inline_data: { mime_type: 'image/jpeg', data: b64 } }
-                    ]
-                }]
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, promptTxt, b64 })
         });
         const d = await resp.json();
         document.body.style.opacity = '1';
